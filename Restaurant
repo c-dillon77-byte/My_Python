@@ -1,1 +1,343 @@
 
+#!/usr/bin/env python3
+"""
+Cash Register + Receipt Printer
+- Ring up unlimited items
+- Per-item tax class (different tax rates)
+- Discounts (percent or fixed) per item (optional)
+- Tender types: cash/card
+- Prints an authentic-looking receipt
+
+Run: python cash_register.py
+"""
+
+from __future__ import annotations
+from dataclasses import dataclass
+from datetime import datetime
+import random
+import textwrap
+
+
+# ----------------------------
+# Configuration
+# ----------------------------
+
+STORE_NAME = "KENLY 95"
+STORE_TAGLINE = "THANK YOU FOR SHOPPING!"
+STORE_ADDRESS = [
+    "923 Johnston Pkwy.",
+    "Kenly, NC 27542",
+    "(919) 502-7054",
+]
+CURRENCY = "$"
+
+# Default tax classes you can pick from (edit as you like)
+DEFAULT_TAX_CLASSES = {
+    "N": 0.00,   # Non-taxable
+    "S": 0.07,   # Standard
+    "R": 0.04,   # Reduced
+}
+
+RECEIPT_WIDTH = 42  # typical thermal printer look
+
+
+# ----------------------------
+# Data Models
+# ----------------------------
+
+@dataclass
+class Item:
+    name: str
+    qty: float
+    unit_price: float
+    tax_rate: float  # e.g., 0.07 for 7%
+    discount_type: str = ""   # "", "PCT", "AMT"
+    discount_value: float = 0.0  # percent (e.g. 10) or dollars
+
+    @property
+    def gross(self) -> float:
+        return self.qty * self.unit_price
+
+    @property
+    def discount_amount(self) -> float:
+        if self.discount_type == "PCT":
+            return round(self.gross * (self.discount_value / 100.0), 2)
+        if self.discount_type == "AMT":
+            return round(min(self.discount_value, self.gross), 2)
+        return 0.0
+
+    @property
+    def net(self) -> float:
+        return round(self.gross - self.discount_amount, 2)
+
+    @property
+    def tax(self) -> float:
+        return round(self.net * self.tax_rate, 2)
+
+    @property
+    def total(self) -> float:
+        return round(self.net + self.tax, 2)
+
+
+# ----------------------------
+# Helpers
+# ----------------------------
+
+def money(x: float) -> str:
+    return f"{CURRENCY}{x:,.2f}"
+
+def center(text: str, width: int = RECEIPT_WIDTH) -> str:
+    return text.center(width)
+
+def hr(ch: str = "-") -> str:
+    return ch * RECEIPT_WIDTH
+
+def prompt_nonempty(prompt: str) -> str:
+    while True:
+        s = input(prompt).strip()
+        if s:
+            return s
+        print("Please enter a value.")
+
+def prompt_float(prompt: str, allow_zero: bool = False) -> float:
+    while True:
+        s = input(prompt).strip()
+        try:
+            v = float(s)
+            if (v == 0 and not allow_zero) or v < 0:
+                print("Enter a number greater than 0." if not allow_zero else "Enter 0 or greater.")
+                continue
+            return v
+        except ValueError:
+            print("Please enter a valid number (e.g., 1.99).")
+
+def prompt_yes_no(prompt: str) -> bool:
+    while True:
+        s = input(prompt + " (y/n): ").strip().lower()
+        if s in ("y", "yes"):
+            return True
+        if s in ("n", "no"):
+            return False
+        print("Please type y or n.")
+
+def prompt_choice(prompt: str, choices: list[str]) -> str:
+    choices_lower = [c.lower() for c in choices]
+    while True:
+        s = input(prompt).strip()
+        if s.lower() in choices_lower:
+            return choices[choices_lower.index(s.lower())]
+        print(f"Choose one of: {', '.join(choices)}")
+
+def wrap_name(name: str, width: int) -> list[str]:
+    return textwrap.wrap(name, width=width) if name else [""]
+
+def line_item(left: str, right: str, width: int = RECEIPT_WIDTH) -> str:
+    # left ... right aligned
+    if len(right) >= width:
+        return right[-width:]
+    space = width - len(right)
+    if len(left) > space:
+        left = left[:space]
+    return left.ljust(space) + right
+
+def gen_txn_id() -> str:
+    return f"{random.randint(100000, 999999)}-{random.randint(1000, 9999)}"
+
+def gen_register_id() -> str:
+    return f"R{random.randint(1, 9)}"
+
+
+# ----------------------------
+# Tax Class Setup
+# ----------------------------
+
+def configure_tax_classes() -> dict[str, float]:
+    tax_classes = dict(DEFAULT_TAX_CLASSES)
+
+    print("\nTax classes currently available:")
+    for k, r in tax_classes.items():
+        print(f"  {k} = {r*100:.2f}%")
+
+    if prompt_yes_no("Do you want to add/edit tax classes"):
+        while True:
+            code = prompt_nonempty("Tax code (ex: S, N, FOOD): ").upper()
+            rate_pct = prompt_float("Tax rate percent (ex: 7 for 7%): ", allow_zero=True)
+            tax_classes[code] = rate_pct / 100.0
+            print(f"Saved: {code} = {rate_pct:.2f}%")
+            if not prompt_yes_no("Add/edit another tax class"):
+                break
+
+    return tax_classes
+
+
+# ----------------------------
+# Register Flow
+# ----------------------------
+
+def add_items(tax_classes: dict[str, float]) -> list[Item]:
+    items: list[Item] = []
+
+    print("\nEnter items. Type DONE as the item name when finished.\n")
+    while True:
+        name = input("Item name (or DONE): ").strip()
+        if not name:
+            print("Please enter an item name, or DONE.")
+            continue
+        if name.upper() == "DONE":
+            break
+
+        qty = prompt_float("Quantity (ex: 1): ")
+        unit_price = prompt_float("Unit price (ex: 2.99): ")
+
+        print("\nTax codes:")
+        codes = sorted(tax_classes.keys())
+        print("  " + "  ".join([f"{c}({tax_classes[c]*100:.2f}%)" for c in codes]))
+        tax_code = prompt_choice("Tax code: ", codes)
+        tax_rate = tax_classes[tax_code]
+
+        discount_type = ""
+        discount_value = 0.0
+        if prompt_yes_no("Discount for this item"):
+            dtype = prompt_choice("Discount type (PCT/AMT): ", ["PCT", "AMT"])
+            if dtype == "PCT":
+                discount_value = prompt_float("Percent off (ex: 10 for 10%): ", allow_zero=True)
+                discount_type = "PCT"
+            else:
+                discount_value = prompt_float("Amount off (ex: 1.00): ", allow_zero=True)
+                discount_type = "AMT"
+
+        items.append(Item(
+            name=name,
+            qty=qty,
+            unit_price=unit_price,
+            tax_rate=tax_rate,
+            discount_type=discount_type,
+            discount_value=discount_value
+        ))
+
+        print("Added.\n")
+
+    return items
+
+
+def totals(items: list[Item]) -> dict[str, float]:
+    gross = round(sum(i.gross for i in items), 2)
+    discounts = round(sum(i.discount_amount for i in items), 2)
+    net = round(sum(i.net for i in items), 2)
+    tax = round(sum(i.tax for i in items), 2)
+    total = round(sum(i.total for i in items), 2)
+    return {"gross": gross, "discounts": discounts, "net": net, "tax": tax, "total": total}
+
+
+def take_payment(amount_due: float) -> dict[str, float | str]:
+    print("\nPayment")
+    method = prompt_choice("Method (CASH/CARD): ", ["CASH", "CARD"])
+
+    if method == "CARD":
+        # Simulate approved transaction
+        auth = f"APPROVED {random.randint(100000, 999999)}"
+        return {"method": "CARD", "tendered": amount_due, "change": 0.0, "auth": auth}
+
+    # CASH
+    while True:
+        tendered = prompt_float(f"Cash received (amount due {money(amount_due)}): ", allow_zero=False)
+        if tendered + 1e-9 < amount_due:
+            print(f"Not enough cash. Need at least {money(amount_due)}.")
+            continue
+        change = round(tendered - amount_due, 2)
+        return {"method": "CASH", "tendered": tendered, "change": change, "auth": ""}
+
+
+# ----------------------------
+# Receipt Printing
+# ----------------------------
+
+def print_receipt(items: list[Item], t: dict[str, float], pay: dict[str, float | str]) -> None:
+    now = datetime.now()
+    txn = gen_txn_id()
+    reg = gen_register_id()
+
+    # Header
+    print("\n" + center(STORE_NAME))
+    print(center(STORE_TAGLINE))
+    for line in STORE_ADDRESS:
+        print(center(line))
+    print(hr("="))
+    print(line_item(f"DATE {now.strftime('%m/%d/%Y')}", f"TIME {now.strftime('%I:%M %p')}"))
+    print(line_item(f"REG {reg}", f"TRANS {txn}"))
+    print(hr("-"))
+
+    # Items
+    for it in items:
+        # First line: name (wrapped if needed)
+        name_lines = wrap_name(it.name.upper(), RECEIPT_WIDTH)
+        for idx, nl in enumerate(name_lines):
+            if idx == 0:
+                print(nl)
+            else:
+                print(" " + nl)
+
+        # Second line: qty x price and line total (net before tax or after? many receipts show line ext)
+        ext = it.net  # show discounted net as the "extended"
+        left = f" {it.qty:g} @ {money(it.unit_price)}"
+        right = money(ext)
+        print(line_item(left, right))
+
+        # Discount line if any
+        if it.discount_amount > 0:
+            if it.discount_type == "PCT":
+                dtext = f"  DISC {it.discount_value:g}%"
+            else:
+                dtext = f"  DISC"
+            print(line_item(dtext, f"-{money(it.discount_amount)}"))
+
+        # Tax line (optional to show)
+        if it.tax_rate > 0:
+            print(line_item(f"  TAX {it.tax_rate*100:.2f}%", money(it.tax)))
+
+        print("")  # small gap
+
+    print(hr("-"))
+    # Totals
+    print(line_item("SUBTOTAL", money(t["net"])))
+    if t["discounts"] > 0:
+        print(line_item("DISCOUNTS", f"-{money(t['discounts'])}"))
+    print(line_item("TAX", money(t["tax"])))
+    print(hr("-"))
+    print(line_item("TOTAL", money(t["total"])))
+    print(hr("="))
+
+    # Payment
+    method = str(pay["method"])
+    tendered = float(pay["tendered"])
+    change = float(pay["change"])
+    print(line_item(f"TENDER {method}", money(tendered)))
+    if method == "CARD":
+        auth = str(pay.get("auth", ""))
+        if auth:
+            print(line_item("AUTH", auth))
+    else:
+        print(line_item("CHANGE", money(change)))
+
+    print(hr("="))
+    print(center("NO REFUNDS WITHOUT RECEIPT"))
+    print(center("HAVE A NICE DAY!"))
+    print("\n")
+
+
+def main() -> None:
+    print("Cash Register (Receipt Printer)\n")
+    tax_classes = configure_tax_classes()
+    items = add_items(tax_classes)
+
+    if not items:
+        print("\nNo items entered. Exiting.")
+        return
+
+    t = totals(items)
+    pay = take_payment(t["total"])
+    print_receipt(items, t, pay)
+
+
+if __name__ == "__main__":
+    main()
