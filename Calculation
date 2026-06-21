@@ -1,1 +1,104 @@
 
+import math
+
+def get_number(prompt="Enter a number: "):
+    while True:
+        try:
+            return float(input(prompt))
+        except ValueError:
+            print("Invalid input. Please enter a valid number.")
+
+def calculator():
+    print("\n=== Scientific Calculator ===")
+    print("Type the number of the operation you want.\n")
+
+    while True:
+        print("\nOperations:")
+        print("1) Add (+)")
+        print("2) Subtract (-)")
+        print("3) Multiply (*)")
+        print("4) Divide (/)")
+        print("5) Power (x^y)")
+        print("6) Square root (√x)")
+        print("7) Log base 10 (log10)")
+        print("8) Natural log (ln)")
+        print("9) Sine (sin)")
+        print("10) Cosine (cos)")
+        print("11) Tangent (tan)")
+        print("12) Factorial (n!)")
+        print("13) Exit")
+
+        choice = input("\nChoose an option (1-13): ").strip()
+
+        if choice == "13":
+            print("Goodbye!")
+            break
+
+        # Two-number operations
+        if choice in ["1", "2", "3", "4", "5"]:
+            x = get_number("Enter first number: ")
+            y = get_number("Enter second number: ")
+
+            if choice == "1":
+                print("Result:", x + y)
+            elif choice == "2":
+                print("Result:", x - y)
+            elif choice == "3":
+                print("Result:", x * y)
+            elif choice == "4":
+                if y == 0:
+                    print("Error: Cannot divide by zero.")
+                else:
+                    print("Result:", x / y)
+            elif choice == "5":
+                print("Result:", x ** y)
+
+        # One-number operations
+        elif choice in ["6", "7", "8", "9", "10", "11", "12"]:
+            x = get_number("Enter a number: ")
+
+            if choice == "6":
+                if x < 0:
+                    print("Error: Cannot take square root of a negative number.")
+                else:
+                    print("Result:", math.sqrt(x))
+
+            elif choice == "7":
+                if x <= 0:
+                    print("Error: log10 requires a positive number.")
+                else:
+                    print("Result:", math.log10(x))
+
+            elif choice == "8":
+                if x <= 0:
+                    print("Error: ln requires a positive number.")
+                else:
+                    print("Result:", math.log(x))
+
+            elif choice in ["9", "10", "11"]:
+                print("\nAngles:")
+                print("1) Degrees")
+                print("2) Radians")
+                angle_type = input("Choose (1 or 2): ").strip()
+
+                if angle_type == "1":
+                    x = math.radians(x)
+
+                if choice == "9":
+                    print("Result:", math.sin(x))
+                elif choice == "10":
+                    print("Result:", math.cos(x))
+                elif choice == "11":
+                    print("Result:", math.tan(x))
+
+            elif choice == "12":
+                if x < 0 or not x.is_integer():
+                    print("Error: Factorial only works for whole numbers 0 or greater.")
+                else:
+                    print("Result:", math.factorial(int(x)))
+
+        else:
+            print("Invalid choice. Pick a number from 1 to 13.")
+
+if __name__ == "__main__":
+    calculator()
