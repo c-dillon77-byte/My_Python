@@ -1,4 +1,3 @@
-
 #!/usr/bin/env python3
 """
 Cash Register + Receipt Printer
@@ -8,26 +7,27 @@ Cash Register + Receipt Printer
 - Tender types: cash/card
 - Prints an authentic-looking receipt
 
-Run: python cash_register.py
+Run: python cash_register/cash_register.py
 """
 
 from __future__ import annotations
-from dataclasses import dataclass
-from datetime import datetime
+
 import random
 import textwrap
-
+from dataclasses import dataclass
+from datetime import datetime
 
 # ----------------------------
 # Configuration
 # ----------------------------
 
-STORE_NAME = "KENLY 95"
+# Placeholder store details (fictional). Edit these for your own receipts.
+STORE_NAME = "DEMO STORE"
 STORE_TAGLINE = "THANK YOU FOR SHOPPING!"
 STORE_ADDRESS = [
-    "923 Johnston Pkwy.",
-    "Kenly, NC 27542",
-    "(919) 502-7054",
+    "123 Example St.",
+    "Anytown, ST 00000",
+    "(555) 555-0100",
 ]
 CURRENCY = "$"
 
@@ -288,7 +288,7 @@ def print_receipt(items: list[Item], t: dict[str, float], pay: dict[str, float |
             if it.discount_type == "PCT":
                 dtext = f"  DISC {it.discount_value:g}%"
             else:
-                dtext = f"  DISC"
+                dtext = "  DISC"
             print(line_item(dtext, f"-{money(it.discount_amount)}"))
 
         # Tax line (optional to show)

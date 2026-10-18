@@ -1,5 +1,5 @@
-
 import math
+
 
 def get_number(prompt="Enter a number: "):
     while True:
